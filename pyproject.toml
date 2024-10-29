@@ -49,3 +49,6 @@ includes = []
 [tool.pdm.version]
 source = "file"
 path = "nonebot_plugin_nailongremove/__init__.py"
+
+[tool.nonebot]
+plugins = ["nonebot_plugin_nailongremove"]

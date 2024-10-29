@@ -56,6 +56,11 @@ async def nailong_rule(
 ) -> bool:
     return (
         bool(session.member)  # 检查是否是群聊消息，此值仅在群聊与频道中存在
+        and judge_list(  # 黑白名单
+            config.nailong_list_scenes,
+            session.scene_path,
+            config.nailong_blacklist,
+        )
         and (
             # bypass superuser
             (not await SUPERUSER(bot, event))
@@ -63,15 +68,22 @@ async def nailong_rule(
             or ((not session.member.role) or session.member.role.level <= 1)
         )
         and ((Image in msg) or (MarketFace in msg))  # msg has image
-        and judge_list(  # 黑白名单
-            config.nailong_list_scenes,
-            session.scene_path,
-            config.nailong_blacklist,
-        )
     )
 
 
 nailong = on_message(rule=Rule(nailong_rule))
+
+
+async def hasimage_rule(
+    bot: BaseBot,
+    event: BaseEvent,
+    session: Uninfo,
+    msg: UniMsg,
+) -> bool:
+    return (Image in msg) or (MarketFace in msg)  # msg has image
+
+
+hasimage = on_message(rule=Rule(hasimage_rule))
 
 
 @nailong.handle()
@@ -124,3 +136,37 @@ async def handle_function(
                 except Exception as e:
                     logger.warning(f"{type(e).__name__}: {e}")
             await m.finish()
+
+
+@hasimage.handle()
+async def handle_function(
+    m: Matcher,
+    bot: BaseBot,
+    ev: BaseEvent,
+    msg: UniMsg,
+    session: Uninfo,
+    state: T_State,
+):
+    from time import time
+
+    for seg in msg:
+        if isinstance(seg, Image):
+            image = await image_fetch(ev, bot, state, seg)
+            if not image:
+                logger.warning(f"Failed to fetch image: {seg!r}")
+                continue
+
+        elif isinstance(seg, MarketFace):
+            url = f"https://gxh.vip.qq.com/club/item/parcel/item/{seg.id[:2]}/{seg.id}/raw300.gif"
+            req = Request("GET", url)
+            try:
+                resp = await bot.adapter.request(req)
+            except Exception as e:
+                logger.warning(f"Failed to fetch {seg!r}: {type(e).__name__}: {e}")
+                continue
+            image = cast(bytes, resp.content)
+
+        else:
+            continue
+
+        cv2.imwrite("unknown/%d.png" % time(), transform_image(image))
